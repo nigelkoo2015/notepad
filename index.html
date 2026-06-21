@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My Notepad</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; background: #f4f6f8; color: #222;
+  }
+  header {
+    background: #2563eb; color: #fff; padding: 14px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header button {
+    background: #fff; color: #2563eb; border: 0; padding: 6px 12px;
+    border-radius: 6px; cursor: pointer; font-weight: 600;
+  }
+  main { max-width: 900px; margin: 30px auto; padding: 0 16px; }
+  .card {
+    background: #fff; border-radius: 10px; padding: 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 20px;
+  }
+  h2 { margin-top: 0; }
+  label { display: block; margin: 10px 0 4px; font-size: 14px; font-weight: 600; }
+  input, textarea {
+    width: 100%; padding: 10px; border: 1px solid #cbd5e1;
+    border-radius: 6px; font-size: 14px; font-family: inherit;
+  }
+  textarea { min-height: 140px; resize: vertical; }
+  button.primary {
+    margin-top: 14px; background: #2563eb; color: #fff; border: 0;
+    padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:hover { background: #1d4ed8; }
+  button.danger {
+    background: #dc2626; color: #fff; border: 0;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  button.ghost {
+    background: #e5e7eb; color: #111; border: 0;
+    padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    margin-right: 6px;
+  }
+  .msg { margin-top: 10px; font-size: 14px; }
+  .msg.error { color: #b91c1c; }
+  .msg.ok    { color: #047857; }
+  .switch { margin-top: 16px; font-size: 14px; }
+  .switch a { color: #2563eb; cursor: pointer; text-decoration: underline; }
+  .note {
+    border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;
+    margin-bottom: 12px; background: #fff;
+  }
+  .note h3 { margin: 0 0 6px; font-size: 16px; }
+  .note p  { margin: 0 0 8px; white-space: pre-wrap; color: #334155; }
+  .note small { color: #64748b; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📒 My Notepad</h1>
+  <div id="userBar" class="hidden">
+    Signed in as <strong id="whoami"></strong>
+    &nbsp;<button onclick="logout()">Log out</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===== LOGIN ===== -->
+  <section id="loginCard" class="card">
+    <h2>Log in</h2>
+    <label>User ID</label>
+    <input id="loginUser" autocomplete="username" />
+    <label>Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password" />
+    <button class="primary" onclick="login()">Log in</button>
+    <div id="loginMsg" class="msg"></div>
+    <div class="switch">
+      No account yet? <a href="#" id="goSignup">Create one</a>
+    </div>
+  </section>
+
+  <!-- ===== SIGN UP ===== -->
+  <section id="signupCard" class="card hidden">
+    <h2>Sign up</h2>
+    <label>Choose a User ID</label>
+    <input id="signupUser" autocomplete="username" />
+    <label>Choose a Password</label>
+    <input id="signupPass" type="password" autocomplete="new-password" />
+    <button class="primary" onclick="signup()">Request account</button>
+    <div id="signupMsg" class="msg"></div>
+    <div class="switch">
+      Already have an account? <a href="#" id="goLogin">Log in</a>
+    </div>
+    <p style="margin-top:14px;font-size:13px;color:#64748b">
+      Your request must be approved by the administrator before you can log in.
+    </p>
+  </section>
+
+  <!-- ===== NOTES APP ===== -->
+  <section id="appCard" class="card hidden">
+    <h2 id="editorTitle">New note</h2>
+    <input id="noteId" type="hidden" />
+    <label>Title</label>
+    <input id="noteTitle" placeholder="My note title" />
+    <label>Content</label>
+    <textarea id="noteContent" placeholder="Write something..."></textarea>
+    <button class="primary" onclick="saveNote()">Save note</button>
+    <button class="ghost" onclick="clearEditor()" style="margin-top:14px">Clear</button>
+    <div id="noteMsg" class="msg"></div>
+
+    <hr style="margin:24px 0" />
+    <h2>Your notes</h2>
+    <div id="notesList"><em>Loading…</em></div>
+  </section>
+
+</main>
+
+<!-- Supabase JS client (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Your project keys -->
+<script src="config.js"></script>
+
+<script>
+// ---------- helpers ----------
+const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf))
+              .map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+const $ = id => document.getElementById(id);
+function msg(el, text, kind) {
+  el.textContent = text;
+  el.className = "msg " + (kind || "");
+}
+
+function showLogin()  { $("loginCard").classList.remove("hidden"); $("signupCard").classList.add("hidden"); }
+function showSignup() { $("signupCard").classList.remove("hidden"); $("loginCard").classList.add("hidden"); }
+
+// ---------- sign up ----------
+async function signup() {
+  const u = $("signupUser").value.trim();
+  const p = $("signupPass").value;
+  if (!u || !p) return msg($("signupMsg"), "User ID and password are required.", "error");
+  if (p.length < 4) return msg($("signupMsg"), "Password should be at least 4 characters.", "error");
+
+  const hash = await sha256(p);
+  const { error } = await sb.from("users").insert({ user_id: u, password_hash: hash });
+  if (error) {
+    if (error.code === "23505") return msg($("signupMsg"), "That User ID is already taken.", "error");
+    return msg($("signupMsg"), "Error: " + error.message, "error");
+  }
+  msg($("signupMsg"),
+    "✅ Account request submitted. Please wait for the administrator to approve it.",
+    "ok");
+  $("signupUser").value = ""; $("signupPass").value = "";
+}
+
+// ---------- log in ----------
+async function login() {
+  const u = $("loginUser").value.trim();
+  const p = $("loginPass").value;
+  if (!u || !p) return msg($("loginMsg"), "User ID and password are required.", "error");
+
+  const hash = await sha256(p);
+  const { data, error } = await sb.from("users")
+        .select("user_id, password_hash, approved")
+        .eq("user_id", u).maybeSingle();
+
+  if (error)       return msg($("loginMsg"), "Error: " + error.message, "error");
+  if (!data)       return msg($("loginMsg"), "User not found.", "error");
+  if (data.password_hash !== hash) return msg($("loginMsg"), "Wrong password.", "error");
+  if (!data.approved) return msg($("loginMsg"),
+        "Your account has not been approved yet. Please wait for the administrator.", "error");
+
+  localStorage.setItem("notepad_user", u);
+  enterApp(u);
+}
+
+function logout() {
+  localStorage.removeItem("notepad_user");
+  $("userBar").classList.add("hidden");
+  $("appCard").classList.add("hidden");
+  showLogin();
+  msg($("loginMsg"), "", "");
+}
+
+// ---------- enter app ----------
+function enterApp(u) {
+  $("loginCard").classList.add("hidden");
+  $("signupCard").classList.add("hidden");
+  $("appCard").classList.remove("hidden");
+  $("userBar").classList.remove("hidden");
+  $("whoami").textContent = u;
+  clearEditor();
+  loadNotes();
+}
+
+// ---------- notes CRUD ----------
+function clearEditor() {
+  $("noteId").value = "";
+  $("noteTitle").value = "";
+  $("noteContent").value = "";
+  $("editorTitle").textContent = "New note";
+  msg($("noteMsg"), "", "");
+}
+
+async function saveNote() {
+  const u   = localStorage.getItem("notepad_user");
+  const id  = $("noteId").value;
+  const row = {
+    user_id:   u,
+    title:     $("noteTitle").value.trim() || "Untitled",
+    content:   $("noteContent").value,
+    updated_at: new Date().toISOString()
+  };
+
+  let res;
+  if (id) {
+    res = await sb.from("notes").update(row).eq("id", id).eq("user_id", u);
+  } else {
+    res = await sb.from("notes").insert(row);
+  }
+  if (res.error) return msg($("noteMsg"), "Error: " + res.error.message, "error");
+  msg($("noteMsg"), "✅ Saved.", "ok");
+  clearEditor();
+  loadNotes();
+}
+
+async function loadNotes() {
+  const u = localStorage.getItem("notepad_user");
+  const { data, error } = await sb.from("notes")
+        .select("*").eq("user_id", u).order("updated_at", { ascending: false });
+  const list = $("notesList");
+  if (error) { list.innerHTML = "Error: " + error.message; return; }
+  if (!data.length) { list.innerHTML = "<em>No notes yet. Create your first one above.</em>"; return; }
+
+  list.innerHTML = data.map(n => `
+    <div class="note">
+      <h3>${escapeHtml(n.title)}</h3>
+      <p>${escapeHtml(n.content)}</p>
+      <small>Updated ${new Date(n.updated_at).toLocaleString()}</small>
+      <div style="margin-top:8px">
+        <button class="ghost"  onclick="editNote('${n.id}')">Edit</button>
+        <button class="danger" onclick="deleteNote('${n.id}')">Delete</button>
+      </div>
+    </div>`).join("");
+}
+
+async function editNote(id) {
+  const u = localStorage.getItem("notepad_user");
+  const { data, error } = await sb.from("notes")
+        .select("*").eq("id", id).eq("user_id", u).maybeSingle();
+  if (error || !data) return;
+  $("noteId").value      = data.id;
+  $("noteTitle").value   = data.title;
+  $("noteContent").value = data.content;
+  $("editorTitle").textContent = "Edit note";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+async function deleteNote(id) {
+  if (!confirm("Delete this note?")) return;
+  const u = localStorage.getItem("notepad_user");
+  const { error } = await sb.from("notes").delete().eq("id", id).eq("user_id", u);
+  if (error) return alert("Error: " + error.message);
+  loadNotes();
+}
+
+function escapeHtml(s) {
+  return (s||"").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
+}
+
+// ---------- wire up link clicks ----------
+document.getElementById("goSignup").addEventListener("click", function(e){
+  e.preventDefault(); showSignup();
+});
+document.getElementById("goLogin").addEventListener("click", function(e){
+  e.preventDefault(); showLogin();
+});
+
+// ---------- auto-resume session ----------
+(function init() {
+  const u = localStorage.getItem("notepad_user");
+  if (u) enterApp(u);
+})();
+</script>
+</body>
+</html>
