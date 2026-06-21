@@ -128,7 +128,33 @@
 <script src="config.js"></script>
 
 <script>
+// ---------- navigation (wired FIRST so links always work) ----------
+function showLogin()  {
+  document.getElementById("loginCard").classList.remove("hidden");
+  document.getElementById("signupCard").classList.add("hidden");
+  document.getElementById("loginMsg").textContent  = "";
+  document.getElementById("signupMsg").textContent = "";
+}
+function showSignup() {
+  document.getElementById("signupCard").classList.remove("hidden");
+  document.getElementById("loginCard").classList.add("hidden");
+  document.getElementById("loginMsg").textContent  = "";
+  document.getElementById("signupMsg").textContent = "";
+  document.getElementById("signupUser").value = "";
+  document.getElementById("signupPass").value = "";
+}
+
+document.getElementById("goSignup").addEventListener("click", function(e){
+  e.preventDefault(); showSignup();
+});
+document.getElementById("goLogin").addEventListener("click", function(e){
+  e.preventDefault(); showLogin();
+});
+
 // ---------- helpers ----------
+if (typeof supabase === "undefined") {
+  alert("Supabase library failed to load. Check your internet connection and reload the page.");
+}
 const sb = supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
 
 async function sha256(text) {
@@ -142,9 +168,6 @@ function msg(el, text, kind) {
   el.textContent = text;
   el.className = "msg " + (kind || "");
 }
-
-function showLogin()  { $("loginCard").classList.remove("hidden"); $("signupCard").classList.add("hidden"); }
-function showSignup() { $("signupCard").classList.remove("hidden"); $("loginCard").classList.add("hidden"); }
 
 // ---------- sign up ----------
 async function signup() {
@@ -281,14 +304,6 @@ function escapeHtml(s) {
     "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
   }[c]));
 }
-
-// ---------- wire up link clicks ----------
-document.getElementById("goSignup").addEventListener("click", function(e){
-  e.preventDefault(); showSignup();
-});
-document.getElementById("goLogin").addEventListener("click", function(e){
-  e.preventDefault(); showLogin();
-});
 
 // ---------- auto-resume session ----------
 (function init() {
